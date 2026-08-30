@@ -1,0 +1,104 @@
+# ==============================================================================
+# ASSIGNMENT: FLIGHT OPERATIONS DATA ANALYSIS (DAY 10)
+# ==============================================================================
+
+import pandas as pd
+import numpy as np
+
+# ------------------------------------------------------------------------------
+# STEP 1: Load and Understand the Dataset
+# ------------------------------------------------------------------------------
+# Note: Upload 'flight_operations.csv' to your Colab session files before running.
+try:
+    df = pd.read_csv('flight_operations.csv')
+    print("Flight operations dataset loaded successfully!\n")
+except FileNotFoundError:
+    print("Warning: 'flight_operations.csv' not found. Using fallback mock data for testing.")
+    # Creating robust mock data matching typical flight operation records
+    np.random.seed(42)
+    mock_data = {
+        'Flight_ID': [f'FL{100+i}' for i in range(12)],
+        'Airline': ['Indigo', 'Air India', 'Akasa Air', 'Indigo', 'Air India', 'SpiceJet', 
+                    'Vistara', 'Indigo', 'Vistara', 'SpiceJet', 'Air India', 'Akasa Air'],
+        'Origin': ['DEL', 'BOM', 'BLR', 'CCU', 'DEL', 'BOM', 'DEL', 'BLR', 'BOM', 'DEL', 'CCU', 'BLR'],
+        'Destination': ['BOM', 'DEL', 'DEL', 'BOM', 'BLR', 'DEL', 'BLR', 'CCU', 'DEL', 'BLR', 'BOM', 'CCU'],
+        'Departure_Delay_Min': [15, 0, 45, -5, 120, 5, 0, 60, -2, 90, 10, 0],
+        'Arrival_Delay_Min': [20, -10, 50, -2, 115, 0, -5, 55, -8, 85, 12, -3],
+        'Air_Time_Min':,
+        'Distance_Miles':,
+        'Cancelled': [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+    }
+    df = pd.DataFrame(mock_data)
+
+# Display structural preview
+print("--- DATASET PREVIEW (FIRST 5 ROWS) ---")
+print(df.head(), "\n")
+
+# ------------------------------------------------------------------------------
+# STEP 2: Structural and Statistical Inspection
+# ------------------------------------------------------------------------------
+print("--- DATASET INFRASTRUCTURE ---")
+df.info()
+
+print("\n--- MISSING VALUE AUDIT ---")
+print(df.isnull().sum())
+
+print("\n--- DESCRIPTIVE STATISTICS ---")
+print(df.describe())
+
+# ------------------------------------------------------------------------------
+# STEP 3: Data Transformation (Feature Engineering)
+# ------------------------------------------------------------------------------
+# 1. Calculate Ground Speed in MPH: (Distance / (Air_Time / 60))
+df['Ground_Speed_MPH'] = (df['Distance_Miles'] / (df['Air_Time_Min'] / 60)).round(2)
+
+# 2. Total Trip Delay (Departure + Arrival Delay)
+df['Total_Delay_Min'] = df['Departure_Delay_Min'] + df['Arrival_Delay_Min']
+
+# 3. Categorize flights based on delay severity
+def categorize_delay(minutes):
+    if minutes <= 0: return 'On-Time/Early'
+    elif minutes <= 15: return 'Minor Delay'
+    elif minutes <= 60: return 'Moderate Delay'
+    else: return 'Severe Delay'
+
+df['Delay_Status'] = df['Departure_Delay_Min'].apply(categorize_delay)
+
+print("\n--- DATASET AFTER TRANSFORMATIONS ---")
+print(df[['Flight_ID', 'Airline', 'Ground_Speed_MPH', 'Total_Delay_Min', 'Delay_Status']].head())
+
+# ------------------------------------------------------------------------------
+# STEP 4: Selecting, Filtering, and Sorting Records
+# ------------------------------------------------------------------------------
+# Filter out cancelled flights to analyze active operations
+active_flights = df[df['Cancelled'] == 0]
+
+# Filter severely delayed active flights (> 30 mins departure delay)
+severe_delays = active_flights[active_flights['Departure_Delay_Min'] > 30]
+
+# Sort severe delays by longest arrival delay descending
+sorted_delays = severe_delays.sort_values(by='Arrival_Delay_Min', ascending=False)
+
+print("\n--- TOP SEVERELY DELAYED ACTIVE FLIGHTS (SORTED) ---")
+print(sorted_delays[['Flight_ID', 'Airline', 'Origin', 'Destination', 'Departure_Delay_Min', 'Arrival_Delay_Min']].to_string(index=False))
+
+# ------------------------------------------------------------------------------
+# STEP 5: Grouping and Aggregation Analysis
+# ------------------------------------------------------------------------------
+# A. Airline Performance Analysis
+print("\n--- PERFORMANCE METRICS BY AIRLINE ---")
+airline_perf = active_flights.groupby('Airline').agg(
+    Total_Flights=('Flight_ID', 'count'),
+    Avg_Dep_Delay=('Departure_Delay_Min', 'mean'),
+    Max_Arr_Delay=('Arrival_Delay_Min', 'max'),
+    Avg_Speed_MPH=('Ground_Speed_MPH', 'mean')
+).round(2).reset_index()
+print(airline_perf.to_string(index=False))
+
+# B. Route Hub Performance (Origin Airports)
+print("\n--- DELAY METRICS BY ORIGIN HUB ---")
+origin_perf = active_flights.groupby('Origin').agg(
+    Departures=('Flight_ID', 'count'),
+    Avg_Departure_Delay=('Departure_Delay_Min', 'mean')
+).sort_values(by='Avg_Departure_Delay', ascending=False).reset_index()
+print(origin_perf.to_string(index=False))
